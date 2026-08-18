@@ -4,7 +4,7 @@ on:
 #   push:
 #     branches:
 #       - main
-    workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -40,7 +40,7 @@ jobs:
           docker login \
             --username AWS \
             --password-stdin \
-            250368537874.dkr.ecr.ap-southeast-1.amazonaws.com/img1
+            250368537874.dkr.ecr.ap-southeast-1.amazonaws.com
 
 
       # --------------------------------
@@ -81,44 +81,107 @@ jobs:
 
           script: |
 
+            echo "====================================="
+            echo "Installing required packages..."
+            echo "====================================="
+
+            sudo apt-get update -y
+
+            # Install Docker if it is not already installed
+            if ! command -v docker >/dev/null 2>&1; then
+              echo "Docker is not installed. Installing Docker..."
+              sudo apt-get install -y docker.io
+            else
+              echo "Docker is already installed."
+            fi
+
+            # Install AWS CLI if it is not already installed
+            if ! command -v aws >/dev/null 2>&1; then
+              echo "AWS CLI is not installed. Installing AWS CLI..."
+              sudo apt-get install -y awscli
+            else
+              echo "AWS CLI is already installed."
+            fi
+
+
+            echo "====================================="
+            echo "Enabling and starting Docker..."
+            echo "====================================="
+
+            sudo systemctl enable docker
+            sudo systemctl start docker
+
+            # Make sure Docker is running
+            sudo systemctl is-active --quiet docker
+
+            echo "Docker is running."
+
+
+            echo "====================================="
             echo "Logging into ECR..."
+            echo "====================================="
 
             aws ecr get-login-password \
               --region ap-southeast-1 | \
-              docker login \
+              sudo docker login \
               --username AWS \
               --password-stdin \
-              250368537874.dkr.ecr.ap-southeast-1.amazonaws.com/img1
+              250368537874.dkr.ecr.ap-southeast-1.amazonaws.com
 
 
+            echo "====================================="
             echo "Pulling latest Docker image..."
+            echo "====================================="
 
-            docker pull \
+            sudo docker pull \
               250368537874.dkr.ecr.ap-southeast-1.amazonaws.com/img1:latest
 
 
+            echo "====================================="
             echo "Stopping old container..."
+            echo "====================================="
 
-            docker stop img1 || true
+            sudo docker stop img1 || true
 
 
+            echo "====================================="
             echo "Removing old container..."
+            echo "====================================="
 
-            docker rm img1 || true
+            sudo docker rm img1 || true
 
 
+            echo "====================================="
             echo "Starting new container..."
+            echo "====================================="
 
-            docker run -d \
+            sudo docker run -d \
               --name img1 \
               --restart unless-stopped \
               -p 5000:5000 \
-              250368537874.dkr.ecr.ap-southeast-1.amazonaws.com/img1
+              250368537874.dkr.ecr.ap-southeast-1.amazonaws.com/img1:latest
 
 
+            echo "====================================="
             echo "Checking container..."
+            echo "====================================="
 
-            docker ps
+            sudo docker ps
 
 
-            echo "Deployment completed!"
+            echo "====================================="
+            echo "Testing application..."
+            echo "====================================="
+
+            sleep 5
+
+            curl -f http://localhost:5000 || {
+              echo "Application is not responding on port 5000"
+              sudo docker logs img1
+              exit 1
+            }
+
+
+            echo "====================================="
+            echo "Deployment completed successfully!"
+            echo "====================================="
